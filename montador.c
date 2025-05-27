@@ -3,17 +3,16 @@
 #include <string.h>
 #include <stdint.h>
 
-// --- Estrutura para armazenar Labels ---
-#define MAX_LABELS 100 // Número máximo de labels que o montador pode lidar
+#define MAX_LABELS 100
 typedef struct {
-    char name[50]; // Nome do label
-    int address;   // Endereço (em bytes) do label
+    char name[50];
+    int address;
 } Label;
 
 Label labels[MAX_LABELS];
 int label_count = 0;
 
-// Função para adicionar um label à tabela
+// Adiciona um label à tabela.
 void add_label(const char *name, int address) {
     if (label_count < MAX_LABELS) {
         strcpy(labels[label_count].name, name);
@@ -24,17 +23,17 @@ void add_label(const char *name, int address) {
     }
 }
 
-// Função para buscar o endereço de um label
+// Busca o endereço de um label.
 int find_label_address(const char *name) {
     for (int i = 0; i < label_count; i++) {
         if (strcmp(labels[i].name, name) == 0) {
             return labels[i].address;
         }
     }
-    return -1; // Label não encontrado
+    return -1;
 }
 
-// --- Funções Auxiliares ---
+// Converte nome de registrador para seu número.
 int get_register_number(const char *reg_name) {
     if (strcmp(reg_name, "zero") == 0) return 0;
     if (strcmp(reg_name, "ra") == 0) return 1;
@@ -72,9 +71,10 @@ int get_register_number(const char *reg_name) {
     if (reg_name[0] == 'x') {
         return atoi(&reg_name[1]);
     }
-    return -1; // Erro
+    return -1;
 }
 
+// Converte decimal para string binária.
 void dec_to_bin_n_bits(int n, int num, char *bin_str) {
     for (int i = n - 1; i >= 0; i--) {
         bin_str[n - 1 - i] = ((num >> i) & 1) ? '1' : '0';
@@ -82,7 +82,7 @@ void dec_to_bin_n_bits(int n, int num, char *bin_str) {
     bin_str[n] = '\0';
 }
 
-// --- Função da Primeira Passagem ---
+// Primeira Passagem: Mapeia labels para endereços.
 void first_pass(const char *input_filename) {
     FILE *input_file = fopen(input_filename, "r");
     if (input_file == NULL) {
@@ -94,12 +94,10 @@ void first_pass(const char *input_filename) {
     int current_address = 0;
 
     while (fgets(line, sizeof(line), input_file) != NULL) {
-        // Ignora linhas vazias ou comentários
         if (strlen(line) <= 1 || line[0] == '#' || line[0] == ';') {
             continue;
         }
         
-        // Remove quebra de linha e espaços em branco extras no final, se houver
         line[strcspn(line, "\r\n")] = 0;
         
         char temp_line[256];
@@ -107,7 +105,6 @@ void first_pass(const char *input_filename) {
         char *token = strtok(temp_line, " ,\t");
         if (token == NULL) continue;
 
-        // Se a linha contém apenas espaços ou tabs após filtrar comentários, ignora
         int only_whitespace = 1;
         for(int i = 0; line[i] != '\0'; i++) {
             if (line[i] != ' ' && line[i] != '\t') {
@@ -117,27 +114,26 @@ void first_pass(const char *input_filename) {
         }
         if (only_whitespace) continue;
 
-
         if (strchr(token, ':') != NULL) {
             token[strlen(token) - 1] = '\0';
             add_label(token, current_address);
             token = strtok(NULL, " ,\t");
-            if (token == NULL) { // Se a linha só tinha o label
+            if (token == NULL) {
                 continue; 
             }
         }
-        current_address += 4; // Só incrementa se houver instrução
+        current_address += 4;
     }
     fclose(input_file);
 }
 
-// --- Função da Segunda Passagem ---
+// Segunda Passagem: Traduz instruções para binário.
 void second_pass(const char *input_filename, const char *output_filename) {
     FILE *input_file = NULL;
     FILE *output_file = NULL;
     char line[256];
     int current_address = 0;
-    int first_instruction_written = 1; // Flag para controlar a primeira escrita
+    int first_instruction_written = 1;
 
     input_file = fopen(input_filename, "r");
     if (input_file == NULL) {
@@ -153,9 +149,9 @@ void second_pass(const char *input_filename, const char *output_filename) {
     }
 
     while (fgets(line, sizeof(line), input_file) != NULL) {
-        char original_line[256]; // Salva a linha original para msgs de erro
+        char original_line[256];
         strcpy(original_line, line);
-        original_line[strcspn(original_line, "\r\n")] = 0; // Limpa a original também
+        original_line[strcspn(original_line, "\r\n")] = 0;
 
         if (strlen(line) <= 1 || line[0] == '#' || line[0] == ';') {
             continue;
@@ -166,13 +162,11 @@ void second_pass(const char *input_filename, const char *output_filename) {
         char *token = strtok(temp_line, " ,\t");
         if (token == NULL) continue;
         
-        // Verifica se a linha é apenas whitespace (novamente)
         int only_whitespace = 1;
         for(int i = 0; line[i] != '\0'; i++) {
-            if (line[i] != ' ' && line[i] != '\t' && line[i] != ':') { // Permite ':' aqui
+            if (line[i] != ' ' && line[i] != '\t' && line[i] != ':') {
                 char* check_label = strchr(line, ':');
                 if (check_label && (strspn(check_label + 1, " \t") == strlen(check_label + 1))) {
-                    // É um label seguido apenas de whitespace, ignora
                 } else {
                    only_whitespace = 0;
                 }
@@ -192,7 +186,6 @@ void second_pass(const char *input_filename, const char *output_filename) {
         uint32_t instruction_binary = 0;
         int instruction_valid = 1;
 
-        // --- Instruções tipo R ---
         if (strcmp(instr, "add") == 0) {
             char *rd_str = strtok(NULL, " ,\t"); char *rs1_str = strtok(NULL, " ,\t"); char *rs2_str = strtok(NULL, " ,\t");
             if (!rd_str || !rs1_str || !rs2_str) { fprintf(stderr, "Erro 0x%04X: Formato inválido 'add'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
@@ -235,8 +228,6 @@ void second_pass(const char *input_filename, const char *output_filename) {
             else { int rd = get_register_number(rd_str); int rs1 = get_register_number(rs1_str); int shamt = atoi(shamt_str);
             if (rd == -1 || rs1 == -1 || shamt < 0 || shamt >= 32) { fprintf(stderr, "Erro 0x%04X: Param inválido 'srli'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
             else instruction_binary = (0b0000000 << 25) | (shamt << 20) | (rs1 << 15) | (0b101 << 12) | (rd << 7) | 0b0010011; }
-
-        // --- Instruções tipo I ---
         } else if (strcmp(instr, "addi") == 0) {
             char *rd_str = strtok(NULL, " ,\t"); char *rs1_str = strtok(NULL, " ,\t"); char *imm_str = strtok(NULL, " ,\t");
             if (!rd_str || !rs1_str || !imm_str) { fprintf(stderr, "Erro 0x%04X: Formato inválido 'addi'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
@@ -251,8 +242,6 @@ void second_pass(const char *input_filename, const char *output_filename) {
             else { int rd = get_register_number(rd_str); int rs1 = get_register_number(rs1_str); int offset = atoi(offset_str);
             if (rd == -1 || rs1 == -1 || offset < -2048 || offset > 2047) { fprintf(stderr, "Erro 0x%04X: Param inválido 'lw'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
             else instruction_binary = ((offset & 0xFFF) << 20) | (rs1 << 15) | (0b010 << 12) | (rd << 7) | 0b0000011; } }
-
-        // --- Instruções tipo S ---
         } else if (strcmp(instr, "sw") == 0) {
             char *rs2_str = strtok(NULL, " ,\t"); char *offset_rs1_str = strtok(NULL, " ,\t");
             if (!rs2_str || !offset_rs1_str) { fprintf(stderr, "Erro 0x%04X: Formato inválido 'sw'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
@@ -262,8 +251,6 @@ void second_pass(const char *input_filename, const char *output_filename) {
             if (rs2 == -1 || rs1 == -1 || offset < -2048 || offset > 2047) { fprintf(stderr, "Erro 0x%04X: Param inválido 'sw'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
             else { uint32_t imm_11_5 = (offset >> 5) & 0x7F; uint32_t imm_4_0 = offset & 0x1F;
             instruction_binary = (imm_11_5 << 25) | (rs2 << 20) | (rs1 << 15) | (0b010 << 12) | (imm_4_0 << 7) | 0b0100011; } } }
-
-        // --- Instruções tipo B ---
         } else if (strcmp(instr, "beq") == 0 || strcmp(instr, "bne") == 0) {
             char *rs1_str = strtok(NULL, " ,\t"); char *rs2_str = strtok(NULL, " ,\t"); char *target_label = strtok(NULL, " ,\t");
             if (rs1_str == NULL || rs2_str == NULL || target_label == NULL) { fprintf(stderr, "Erro 0x%04X: Formato inválido '%s'. Linha: %s\n", current_address, instr, original_line); instruction_valid = 0; }
@@ -277,16 +264,12 @@ void second_pass(const char *input_filename, const char *output_filename) {
             else { uint32_t imm_12 = (offset >> 11) & 0x1; uint32_t imm_10_5 = (offset >> 4) & 0x3F; uint32_t imm_4_1 = offset & 0xF; uint32_t imm_11 = (offset >> 10) & 0x1;
             if (strcmp(instr, "beq") == 0) { instruction_binary = (imm_12 << 31) | (imm_10_5 << 25) | (rs2 << 20) | (rs1 << 15) | (0b000 << 12) | (imm_4_1 << 8) | (imm_11 << 7) | 0b1100011; } 
             else { instruction_binary = (imm_12 << 31) | (imm_10_5 << 25) | (rs2 << 20) | (rs1 << 15) | (0b001 << 12) | (imm_4_1 << 8) | (imm_11 << 7) | 0b1100011; } } } } }
-
-        // --- Instruções tipo U ---
         } else if (strcmp(instr, "lui") == 0) {
             char *rd_str = strtok(NULL, " ,\t"); char *imm_str = strtok(NULL, " ,\t");
             if (rd_str == NULL || imm_str == NULL) { fprintf(stderr, "Erro 0x%04X: Formato inválido 'lui'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
             else { int rd = get_register_number(rd_str); int imm = strtol(imm_str, NULL, 0);
             if (rd == -1) { fprintf(stderr, "Erro 0x%04X: Reg inválido 'lui'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
             else instruction_binary = ((imm & 0xFFFFF) << 12) | (rd << 7) | 0b0110111; }
-
-        // --- Instruções tipo J (jal) ---
         } else if (strcmp(instr, "jal") == 0) {
             char *rd_str = strtok(NULL, " ,\t"); char *target_label = strtok(NULL, " ,\t");
             if (rd_str == NULL || target_label == NULL) { fprintf(stderr, "Erro 0x%04X: Formato inválido 'jal'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
@@ -299,8 +282,6 @@ void second_pass(const char *input_filename, const char *output_filename) {
             if (offset < -(1 << 19) || offset >= (1 << 19) ) { fprintf(stderr, "Erro 0x%04X: Offset JAL '%s' fora de alcance. Linha: %s\n", current_address, target_label, original_line); instruction_valid = 0; }
             else { uint32_t imm20 = (offset >> 19) & 0x1; uint32_t imm10_1 = (offset >> 0) & 0x3FF; uint32_t imm11 = (offset >> 10) & 0x1; uint32_t imm19_12 = (offset >> 11) & 0xFF;
             instruction_binary = (imm20 << 31) | (imm10_1 << 21) | (imm11 << 20) | (imm19_12 << 12) | (rd << 7) | 0b1101111; } } } }
-
-        // --- Instruções tipo I (jalr) ---
         } else if (strcmp(instr, "jalr") == 0) {
             char *rd_str = strtok(NULL, " ,\t"); char *next_token = strtok(NULL, " ,\t");
             if (!rd_str || !next_token) { fprintf(stderr, "Erro 0x%04X: Formato inválido 'jalr'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
@@ -311,17 +292,16 @@ void second_pass(const char *input_filename, const char *output_filename) {
             else { int rd = get_register_number(rd_str); int rs1 = get_register_number(rs1_str); int offset = atoi(offset_str);
             if (rd == -1 || rs1 == -1 || offset < -2048 || offset > 2047) { fprintf(stderr, "Erro 0x%04X: Param inválido 'jalr'. Linha: %s\n", current_address, original_line); instruction_valid = 0; }
             else instruction_binary = ((offset & 0xFFF) << 20) | (rs1 << 15) | (0b000 << 12) | (rd << 7) | 0b1100111; } }
-
         } else {
             fprintf(stderr, "Instrução desconhecida 0x%04X: '%s'. Linha: %s\n", current_address, instr, original_line);
             instruction_valid = 0;
         }
 
         if (instruction_valid) {
-             if (!first_instruction_written) {
-                fprintf(output_file, "\n"); // Adiciona newline ANTES da próxima instrução
+            if (!first_instruction_written) {
+                fprintf(output_file, "\n");
             } else {
-                first_instruction_written = 0; // Marca que a primeira já foi escrita
+                first_instruction_written = 0;
             }
 
             char byte_binary_str[9];
@@ -331,16 +311,16 @@ void second_pass(const char *input_filename, const char *output_filename) {
             uint8_t byte3 = (instruction_binary >> 24) & 0xFF;
 
             dec_to_bin_n_bits(8, byte0, byte_binary_str);
-            fprintf(output_file, "%s", byte_binary_str); // Byte 0
+            fprintf(output_file, "%s", byte_binary_str);
 
             dec_to_bin_n_bits(8, byte1, byte_binary_str);
-            fprintf(output_file, "\n%s", byte_binary_str); // Byte 1
+            fprintf(output_file, "\n%s", byte_binary_str);
 
             dec_to_bin_n_bits(8, byte2, byte_binary_str);
-            fprintf(output_file, "\n%s", byte_binary_str); // Byte 2
+            fprintf(output_file, "\n%s", byte_binary_str);
 
             dec_to_bin_n_bits(8, byte3, byte_binary_str);
-            fprintf(output_file, "\n%s", byte_binary_str); // Byte 3 (Sem \n aqui)
+            fprintf(output_file, "\n%s", byte_binary_str);
             
             current_address += 4;
         }
@@ -351,23 +331,22 @@ void second_pass(const char *input_filename, const char *output_filename) {
     printf("Montagem concluída! Arquivo '%s' gerado.\n", output_filename);
 }
 
+// Função principal: Processa argumentos e orquestra a montagem.
 int main(int argc, char *argv[]) {
     const char *input_filename;
     const char *output_filename;
 
-    // Verifica os argumentos da linha de comando
     if (argc == 2) {
         input_filename = argv[1];
-        output_filename = "memoria.mif"; // Nome padrão
+        output_filename = "memoria.mif";
     } else if (argc == 3) {
         input_filename = argv[1];
-        output_filename = argv[2]; // Nome fornecido
+        output_filename = argv[2];
     } else {
         fprintf(stderr, "Uso: %s <arquivo_entrada.asm> [arquivo_saida.mif]\n", argv[0]);
-        return 1; // Retorna erro
+        return 1;
     }
 
-    // Print input file name and content
     printf("%s:\n", input_filename);
     FILE *asm_file_for_print = fopen(input_filename, "r");
     if (asm_file_for_print == NULL) {
@@ -375,25 +354,20 @@ int main(int argc, char *argv[]) {
         return 1; 
     }
     char line_buffer[256];
-    int last_char = EOF; // Para verificar se o arquivo termina com \n
+    int last_char = EOF;
     while (fgets(line_buffer, sizeof(line_buffer), asm_file_for_print)) {
         fputs(line_buffer, stdout);
         last_char = line_buffer[strlen(line_buffer)-1];
     }
     fclose(asm_file_for_print);
-    // Garante uma nova linha após o conteúdo do asm, se necessário.
     if (last_char != '\n' && last_char != EOF) {
         printf("\n");
     }
-    printf("\n"); // Adiciona uma linha extra para separar do output
+    printf("\n");
 
-    // First Pass: Coleta labels
     first_pass(input_filename);
-
-    // Second Pass: Monta o código e resolve labels
     second_pass(input_filename, output_filename);
 
-    // Print output file name and content
     printf("\n%s:\n", output_filename); 
     FILE *mif_file_for_print = fopen(output_filename, "r");
     if (mif_file_for_print == NULL) {
@@ -404,7 +378,6 @@ int main(int argc, char *argv[]) {
             fputs(mif_line_buffer, stdout);
         }
         fclose(mif_file_for_print);
-        // Adiciona uma nova linha no final do *print* para o prompt não grudar
         printf("\n");
     }
 
